@@ -1,6 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, EventEmitter, OnInit,Output } from '@angular/core';
+import { delay } from 'rxjs';
 import { ProductService } from 'src/app/services/product.service';
 import { UserService } from 'src/app/services/user.service';
+import { MatDialog } from '@angular/material/dialog';
+import { PopupLocaltoCartComponent } from '../popup-localto-cart/popup-localto-cart.component';
+import { Router } from '@angular/router';
+import { SharedService } from 'src/app/services/sharedservice.service';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSidenavModule } from '@angular/material/sidenav';
+
+
 
 
 @Component({
@@ -11,6 +20,15 @@ import { UserService } from 'src/app/services/user.service';
 export class HomeComponent implements OnInit {
   prodlist: any[]=[];
   cartProducts:any[]=[];
+  isLoggedIn:boolean=false;
+  localCart:any[]=[];
+  isRefreshed:boolean=false;
+  activeTag: string = '';
+  options: string[] = ['Rating', 'Price','None'];
+  selectedOption: string='';
+  previousOption:string='';
+
+  @Output() public childevent=new EventEmitter<any[]>();
   cartObj : any = {
     CartId: 0,
     CustId: 1,
@@ -20,94 +38,221 @@ export class HomeComponent implements OnInit {
     productPrice:0,
     productName:''
   };
+  duplicateList:any[]=[];
   subTotal: number | undefined;
   user1:any;
-  constructor(private prod:ProductService ,private user:UserService){
-   // this.getUser();
-      
+  ranhere:boolean=false;
+  constructor(private prod:ProductService ,private user:UserService,private dialog:MatDialog,private router:Router,private sharedService: SharedService){
    
-      
-    
+   
+   this.prod.LoginSubject.next(true);
   }
 
   ngOnInit(): void {
+    
     this.getUser();
+    delay(100);
     this.loadAllProducts();
     
     
   }
+  
+  openDialogue(){
+    this.dialog.open(PopupLocaltoCartComponent);
+    this.sharedService.setOpenDialogOnce(false);
+  }
 
 
 getUser(){
-  debugger;
-  this.user.profile().subscribe((result:any)=>{
-    console.log(result.user);
-    debugger;
-    this.user1=result.user;
-  });
+  
+  try{
+    if(!!localStorage.getItem('token')){
+    this.user.profile().subscribe((result:any)=>{
+      if(!!result.user){
+      this.user1=result.user;
+      this.isLoggedIn=true;
+      if(!!localStorage.getItem('LocalCart')){
+        const shouldOpenDialog = this.sharedService.getOpenDialogOnce();
+        if(shouldOpenDialog){
+        this.openDialogue();
+        }
+      }
+      this.router.navigate(["products"]);
+      }
+    },
+    (error: any) => {
+      this.isLoggedIn=false;
+      
+    }
+   
+    );
+    this.prod.LoginSubject.next(true);
+  }
+
+  }
+  catch(error)
+  {
+    this.isLoggedIn=false;
+  }
+
 }
 
-  
 
-  loadCart(){
-    console.log(this.user1);
-    let id=this.user1.id;
-    debugger;
-    this.prod.getCartItemsByCustId(id).subscribe((res: any)=> {
-      this.cartProducts = res;
-      debugger;
-    
-    })
-  
-  }
   loadAllProducts(){
     this.prod.getAllProducts().subscribe((result:any)=>{
       this.prodlist=result;
-      this.loadCart();
+      this.duplicateList=this.prodlist;
       this.prod.cartAddedSubject.next(true);
     });
+   
+   
+  }
 
+  closeDialogue(){
+    this.dialog.closeAll();
   }
 
  addItem(product:any){
   this.addItemToCart(product);
+  
  }
 
   addItemToCart(product: any) {
-    this.loadCart();
-    let tof:boolean=false;
-    let id:number=0;
+   
     this.cartObj.productId = product.productId;
     this.cartObj.productImageUrl=product.productImageUrl;
     this.cartObj.productName=product.productName;
     this.cartObj.productPrice=product.productPrice;
-    this.cartObj.CustId=this.user1.id;
-    for(let i=0;i<this.cartProducts.length;i++){
-      if(this.cartProducts[i].productId==product.productId){
-          this.cartObj.Quantity+=1;
-          this.cartObj.productPrice*=this.cartObj.Quantity;
-          id=this.cartProducts[i].id;
-          tof=true;
-      }
-
-    }
-    if(tof==false){
+    
+    
       this.cartObj.Quantity=1;
-      debugger;
-    this.prod.addToCart(this.cartObj).subscribe((result: any)=>{
+      this.prod.LoginSubject.next(true);
+    if(this.isLoggedIn){
+
+      this.cartObj.CustId=this.user1.id;
+
+    const crtobj={
+      "custId":this.cartObj.CustId,
+      "productId":this.cartObj.productId
+    }
+    this.prod.addToCart(crtobj).subscribe((result: any)=>{
      
         alert("Product Added To Cart");
         this.prod.cartAddedSubject.next(true);
+        this.prod.LoginSubject.next(true);
        
     })
+  
   }
   else{
-    debugger;
-    this.prod.updateCartObject(id,this.cartObj).subscribe((result:any)=>{
-      alert("Product Added To Cart");
-        this.prod.cartAddedSubject.next(true);
-    })
+    try {
+      this.localCart = JSON.parse(localStorage.getItem('LocalCart') || '[]'); 
+      const newCartItem = { ...this.cartObj };
+      this.localCart.push(newCartItem);
+      localStorage.setItem('LocalCart', JSON.stringify(this.localCart));
+      alert("Product added to cart");
+      this.prod.cartAddedSubject.next(true);
+      
+    } catch (error) {
+      console.error("An error occurred while adding the product to the cart:", error);
+    }
+    
   }
   }
+
+  addLocalToCart(){
+    
+    
+    if(localStorage.getItem('LocalCart')){
+    var storedItems =JSON.parse(localStorage.getItem('LocalCart') || '[]'); 
+if (storedItems) {
+  for (var i = 0; i < storedItems.length; i++) {
+    this.addItem(storedItems[i]);
+  }
+}
+}
+localStorage.removeItem('LocalCart');
+this.dialog.closeAll();
+  }
+
+refreshPageOnce(delay: number): void {
+    if (!this.isRefreshed) {
+      this.isRefreshed = true;
+      setTimeout(() => {
+        window.location.reload();
+      }, delay);
+    }
+  }
+
+
+  searchtag(tag:string){
+    this.activeTag = tag;
+    this.prod.searchProducts(tag).subscribe((res)=>{
+      this.prodlist=res;
+    });
+  }
+
+
+  
+  showproduct(id: number) {
+    this.router.navigate(['/item', id]);
+  }
+  
+  onOptionSelected() {
+   if(this.selectedOption=='None'){
+    
+   return
+    }
+    else if(this.selectedOption=='Rating')
+    this.prodlist.sort((a,b)=>a.productRating-b.productRating).reverse();
+   else if(this.selectedOption=='Price')
+    this.prodlist.sort((a,b)=>a.productPrice-b.productPrice)
+}
+
+showCheckboxes: boolean = false;
+selectedPriceRanges1: boolean = false;
+selectedPriceRanges2: boolean = false;
+selectedPriceRanges3: boolean = false;
+selectedPriceRanges4: boolean = false;
+filteredProducts:any[]=[];
+
+filterProducts() {
+ 
+ 
+    this.prodlist = this.duplicateList.filter(product => {
+      if (this.selectedPriceRanges1 && product.productPrice < 300) {
+        return true;
+      }
+      if (this.selectedPriceRanges2 && product.productPrice >= 300 && product.productPrice < 900) {
+        return true;
+      }
+      if (this.selectedPriceRanges3 && product.productPrice >= 900 && product.productPrice <= 2000) {
+        return true;
+      }
+      if (this.selectedPriceRanges4 && product.productPrice > 2000) {
+        return true;
+      }
+      if (!this.selectedPriceRanges1 && !this.selectedPriceRanges2 && !this.selectedPriceRanges3 && !this.selectedPriceRanges4) {
+      
+        return true;
+      }
+      return false;
+    });
+  }
+  
+
+  
+ 
+
+
+toggleFilter() {
+  this.showCheckboxes = !this.showCheckboxes;
+}
+
+
+
+
+
+
 
 }

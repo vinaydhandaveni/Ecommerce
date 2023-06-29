@@ -1,6 +1,13 @@
+.header{
+    color:white;
+    background-color: black;
+  }
+
+
 .textBlur {
     color: transparent;
     text-shadow: 0 0 1px #202122;
+    cursor: pointer;
 }
 
 .navbar {
@@ -39,3 +46,9 @@ a:hover {
     width: 300px;
     padding: 5px;
 }
+
+.container, .container-fluid, .container-lg, .container-md, .container-sm, .container-xl, .container-xxl {
+    --bs-gutter-x: 0;
+    
+  }
+

@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component,OnInit } from '@angular/core';
 import { FormGroup,FormBuilder } from '@angular/forms';
 import { Router } from '@angular/router';
+import { delay } from 'rxjs';
 import { UserService } from 'src/app/services/user.service';
 
 @Component({
@@ -16,47 +17,34 @@ export class LoginComponent implements OnInit{
   ngOnInit(): void {
    
   }
-/*
-  login(){
-    this.http.get<any>("http://localhost:3000/signup").subscribe(res=>{
-      const user=res.find((a:any)=>{
-        return a.email===this.loginForm.value.email && a.password===this.loginForm.value.password;
-      });
-      if(user){
-        alert("Login Successful");
-        this.loginForm.reset();
-        this.router.navigate(['products']);
-      }
-      else{
-        alert("user not found");
-      }
-    },
-    err=>{
-      alert("Something went wrong");
-    
-    })
-  }*/
-  userlogin(data:any){
 
-    this.http.get<any>("http://localhost:3000/signup").subscribe(res=>{
-      const user=res.find((a:any)=>{
-        return a.email===data.email && a.password===data.password;
-      });
-      if(user){
-        alert("Login Successful");
-        this.userService.login(user);
-        this.router.navigate(['products']);
+  userlogin(data: any) {
+    const details = {
+      "email": data.email,
+      "password": data.password
+    };
+  
+    this.http.post<any>("http://localhost:8000/logincheck", details).subscribe(
+      (res) => {
+        if (res.error) {
+          alert("User not found");
+        } else {
+          alert("Login Successful");
+          this.loginAndNavigate(res);
+        }
+      },
+      (err) => {
+        alert("Something went wrong");
       }
-      else{
-        alert("user not found");
-      }
-    },
-    err=>{
-      alert("Something went wrong");
-    
-    })
-
-    
+    );
+  }
+  async loginAndNavigate(user: any): Promise<void> {
+    try {
+      await this.userService.login(user);
+      //  delay(500); // Assuming you have a delay function as shown in the previous response
+    } catch (error) {
+      console.error('Error occurred:', error);
+    }
   }
 
 
